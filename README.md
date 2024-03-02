@@ -18,7 +18,7 @@ Deploy the application in Docker container.
 ```bash
 cd under-maintenance
 docker build -t jamaldevsecops/error-page:latest -f Dockerfile .
-docker run -d -p 4000:3000 -name error_page jamaldevsecops/error-page:latest
+docker run -d -p 4000:3000 --name error_page jamaldevsecops/error-page:latest
 ```
 
 
