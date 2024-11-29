@@ -45,7 +45,7 @@ pipeline {
 
         stage('Deploy Docker Container on Deployment Server') {
             agent {
-                label 'staging'
+                label 'staging1'
             }
             steps {
                 script {
