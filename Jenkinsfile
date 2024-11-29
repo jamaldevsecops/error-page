@@ -25,19 +25,17 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build and Push Docker Image') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'private-docker-repo', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh """
-                        echo "Logging in to private Docker registry..."
-                        docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin <<< "$DOCKER_PASS"
-                        echo "Building Docker image..."
-                        docker build -t ${DOCKER_IMAGE} -f Dockerfile .
-                        echo "Pushing Docker image to private repository..."
-                        docker push ${DOCKER_IMAGE}
-                        echo "Docker image pushed successfully: ${DOCKER_IMAGE}"
-                        """
+                    withCredentials([usernamePassword(credentialsId: env.DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                        sh '''
+                            #!/bin/bash
+                            echo "Logging in to private Docker registry..."
+                            echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin ${DOCKER_REPO_URL}
+                            docker build -t ${DOCKER_IMAGE} -f Dockerfile .
+                            docker push ${DOCKER_IMAGE}
+                        '''
                     }
                 }
             }
@@ -49,19 +47,15 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'private-docker-repo', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh """
-                        echo "Logging in to private Docker registry on deployment server..."
-                        docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin <<< "$DOCKER_PASS"
-                        echo "Pulling Docker image..."
-                        docker pull ${DOCKER_IMAGE}
-                        echo "Stopping and removing existing container, if running..."
-                        docker stop ${CONTAINER_NAME} || true
-                        docker rm ${CONTAINER_NAME} || true
-                        echo "Running new Docker container..."
-                        docker run --restart ${RESTART_POLICY} --name ${CONTAINER_NAME} --network ${NETWORK_NAME} -p ${HOST_PORT}:${CONTAINER_PORT} -d ${DOCKER_IMAGE}
-                        echo "Docker container deployed successfully: ${CONTAINER_NAME}"
-                        """
+                    withCredentials([usernamePassword(credentialsId: env.DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                        sh '''
+                            #!/bin/bash
+                            echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin ${DOCKER_REPO_URL}
+                            docker pull ${DOCKER_IMAGE}
+                            docker stop ${CONTAINER_NAME} || true
+                            docker rm ${CONTAINER_NAME} || true
+                            docker run --restart ${RESTART_POLICY} --name ${CONTAINER_NAME} --network ${NETWORK_NAME} -p ${HOST_PORT}:${CONTAINER_PORT} -d ${DOCKER_IMAGE}
+                        '''
                     }
                 }
             }
