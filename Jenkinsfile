@@ -28,10 +28,10 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: "${DOCKER_HUB_CREDENTIALS}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    withCredentials([usernamePassword(credentialsId: 'private-docker-repo', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         sh """
                         echo "Logging in to private Docker registry..."
-                        echo "${DOCKER_PASS}" | docker login ${DOCKER_REPO_URL} -u "${DOCKER_USER}" --password-stdin
+                        docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin <<< "$DOCKER_PASS"
                         echo "Building Docker image..."
                         docker build -t ${DOCKER_IMAGE} -f Dockerfile .
                         echo "Pushing Docker image to private repository..."
@@ -45,14 +45,14 @@ pipeline {
 
         stage('Deploy Docker Container on Deployment Server') {
             agent {
-                label 'staging1'
+                label 'deployment-server'
             }
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: "${DOCKER_HUB_CREDENTIALS}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    withCredentials([usernamePassword(credentialsId: 'private-docker-repo', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         sh """
                         echo "Logging in to private Docker registry on deployment server..."
-                        echo "${DOCKER_PASS}" | docker login ${DOCKER_REPO_URL} -u "${DOCKER_USER}" --password-stdin
+                        docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin <<< "$DOCKER_PASS"
                         echo "Pulling Docker image..."
                         docker pull ${DOCKER_IMAGE}
                         echo "Stopping and removing existing container, if running..."
