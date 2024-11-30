@@ -17,7 +17,8 @@ pipeline {
         DOCKER_HUB_CREDENTIALS = "private-docker-repo"
         RESTART_POLICY = "always"
         NETWORK_NAME = "bridge"
-        TRIVY_REPORT = "trivy_scan_report.txt"
+        TRIVY_FS_SCAN_REPORT= "/tmp/${CONTAINER_NAME}/trivy_filesystem_scan_report.txt"
+        TRIVY_IMAGE_SCAN_REPORT = "/tmp/${CONTAINER_NAME}/trivy_docker_image_scan_report.txt"
         TRIVY_SEVERITY = "HIGH,CRITICAL"
     }
 
@@ -26,6 +27,28 @@ pipeline {
             steps {
                 echo 'Checking out code...'
                 checkout scm
+            }
+        }
+
+        stage('Trivy Filesystem Scan') {
+            steps {
+                script {
+                    echo 'Running Trivy filesystem scan...'
+                    sh 'env'
+                    def scanStatus = sh(script: """
+                        trivy fs --scanners vuln ./ ${DOCKER_IMAGE} > ${TRIVY_FS_SCAN_REPORT}
+                    """, returnStatus: true)
+
+                    // Debug: Check if the report file exists and its content
+                    sh "ls -l ${TRIVY_FS_SCAN_REPORT}"
+                    sh "cat ${TRIVY_FS_SCAN_REPORT}"
+
+                    if (scanStatus == 0) {
+                        echo 'Trivy filesystem scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
+                    } else {
+                        echo 'Trivy filesystem scan failed. Continuing the pipeline.'
+                    }
+                }
             }
         }
 
@@ -49,29 +72,24 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Trivy Scan') {
-            environment {
-                TRIVY_REPORT = "trivy_scan_report.txt"
-                TRIVY_SEVERITY = "HIGH,CRITICAL"
-            }
             steps {
                 script {
                     echo 'Running Trivy scan...'
                     sh 'env'
                     def scanStatus = sh(script: """
-                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table registry.apsissolutions.com/dev/dev-error-page:latest > /tmp/${TRIVY_REPORT}
+                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table ${DOCKER_IMAGE} > ${TRIVY_IMAGE_SCAN_REPORT}
                     """, returnStatus: true)
-        
+
                     // Debug: Check if the report file exists and its content
-                    sh "ls -l ${TRIVY_REPORT}"
-                    sh "cat ${TRIVY_REPORT}"
-                    sh "touch /tmp/testfile_jamal"
-        
+                    sh "ls -l ${TRIVY_IMAGE_SCAN_REPORT}"
+                    sh "cat ${TRIVY_IMAGE_SCAN_REPORT}"
+
                     if (scanStatus == 0) {
-                        echo 'Trivy scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
+                        echo 'Trivy docker image scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
                     } else {
-                        echo 'Trivy scan failed. Continuing the pipeline.'
+                        echo 'Trivy docker image scan failed. Continuing the pipeline.'
                     }
                 }
             }
@@ -182,7 +200,7 @@ pipeline {
                     to: RECIPIENT_EMAILS,
                     mimeType: 'text/html',
                     attachLog: true,
-                    attachmentsPattern: "${TRIVY_REPORT}" // Ensure this matches the file path
+                    attachmentsPattern: "${TRIVY_IMAGE_SCAN_REPORT}, ${TRIVY_FS_SCAN_REPORT}" // Ensure this matches the file path
                 )
             }
         }
