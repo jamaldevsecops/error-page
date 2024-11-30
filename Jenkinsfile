@@ -18,7 +18,7 @@ pipeline {
         RESTART_POLICY = "always"
         NETWORK_NAME = "bridge"
         TRIVY_FS_SCAN_REPORT= "/tmp/${CONTAINER_NAME}/trivy_filesystem_scan_report.txt"
-        TRIVY_IMAGE_SCAN_REPORT = "/tmp/${CONTAINER_NAME}/trivy_docker_image_scan_report.txt"
+        TRIVY_IMAGE_SCAN_REPORT = "trivy_docker_image_scan_report.txt"
         TRIVY_SEVERITY = "HIGH,CRITICAL"
     }
 
@@ -56,26 +56,23 @@ pipeline {
                 script {
                     echo 'Running Trivy scan for the Docker image...'
                     
-                    // Run Trivy scan and write the output to a report file
+                    // Run Trivy scan and write the output to a report file in the workspace
                     def scanStatus = sh(script: """
-                        mkdir -p /tmp/${CONTAINER_NAME} && \
                         trivy image --severity ${TRIVY_SEVERITY} --no-progress --format table ${DOCKER_IMAGE} > ${TRIVY_IMAGE_SCAN_REPORT}
                     """, returnStatus: true)
                     
-                    // Debugging: Check the existence of the scan report file
-                    echo "Verifying the Trivy scan report file..."
+                    // Verify the report file
                     sh "ls -l ${TRIVY_IMAGE_SCAN_REPORT}"
                     sh "cat ${TRIVY_IMAGE_SCAN_REPORT}"
                     
                     if (scanStatus == 0) {
-                        echo 'Trivy Docker image scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
+                        echo 'Trivy Docker image scan completed successfully.'
                     } else {
-                        echo 'Trivy Docker image scan failed. The pipeline will continue, but ensure to review the scan report.'
+                        echo 'Trivy Docker image scan failed. Review the report for details.'
                     }
                 }
             }
         }
-
 
         stage('Push Docker Image') {
             steps {
@@ -181,7 +178,7 @@ pipeline {
                     to: RECIPIENT_EMAILS,
                     mimeType: 'text/html',
                     attachLog: true,
-                    attachmentsPattern: "${TRIVY_IMAGE_SCAN_REPORT}" // Ensure this matches the file path
+                    attachmentsPattern: "${env.TRIVY_IMAGE_SCAN_REPORT}" // Ensure this matches the file path
                 )
             }
         }
