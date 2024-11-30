@@ -51,16 +51,21 @@ pipeline {
         }
         
         stage('Trivy Scan') {
+            environment {
+                TRIVY_REPORT = "trivy_scan_report.txt"
+                TRIVY_SEVERITY = "HIGH,CRITICAL"
+            }
             steps {
                 script {
                     echo 'Running Trivy scan...'
+                    sh 'env'
                     def scanStatus = sh(script: """
-                        trivy image --severity HIGH,CRITICAL --no-progress --exit-code 0 --format table registry.apsissolutions.com/dev/dev-error-page:latest > trivy_scan_report.txt
+                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table registry.apsissolutions.com/dev/dev-error-page:latest > ${TRIVY_REPORT}
                     """, returnStatus: true)
         
                     // Debug: Check if the report file exists and its content
-                    sh "ls -l trivy_scan_report.txt"
-                    sh "cat trivy_scan_report.txt"
+                    sh "ls -l ${TRIVY_REPORT}"
+                    sh "cat ${TRIVY_REPORT}"
         
                     if (scanStatus == 0) {
                         echo 'Trivy scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
