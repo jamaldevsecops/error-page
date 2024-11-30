@@ -30,28 +30,6 @@ pipeline {
             }
         }
 
-        stage('Trivy Filesystem Scan') {
-            steps {
-                script {
-                    echo 'Running Trivy filesystem scan...'
-                    sh 'env'
-                    def scanStatus = sh(script: """
-                        trivy fs --scanners vuln ./ ${DOCKER_IMAGE} > ${TRIVY_FS_SCAN_REPORT}
-                    """, returnStatus: true)
-
-                    // Debug: Check if the report file exists and its content
-                    sh "ls -l ${TRIVY_FS_SCAN_REPORT}"
-                    sh "cat ${TRIVY_FS_SCAN_REPORT}"
-
-                    if (scanStatus == 0) {
-                        echo 'Trivy filesystem scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
-                    } else {
-                        echo 'Trivy filesystem scan failed. Continuing the pipeline.'
-                    }
-                }
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
                 script {
