@@ -91,8 +91,12 @@ pipeline {
     post {
         always {
             script {
-                def agentIP = sh(script: 'hostname -I | awk \'{print $1}\'', returnStdout: true).trim()
-
+                // Retrieve the IP address of the deployment server
+                def deploymentIP = ''
+                node('QA1') {
+                    deploymentIP = sh(script: 'hostname -I | awk \'{print $1}\'', returnStdout: true).trim()
+                }
+    
                 echo 'Sending email notification...'
                 emailext(
                     subject: "Jenkins Build Notification: ${currentBuild.currentResult}",
@@ -103,7 +107,7 @@ pipeline {
                       <li>Build Number: ${env.BUILD_NUMBER}</li>
                       <li>Status: ${currentBuild.currentResult}</li>
                       <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li>
-                      <li>Application URL: <a href="http://${agentIP}:${HOST_PORT}">http://${agentIP}:${HOST_PORT}</a></li>
+                      <li>Application URL: <a href="http://${deploymentIP}:${HOST_PORT}">http://${deploymentIP}:${HOST_PORT}</a></li>
                     </ul>
                     """,
                     to: RECIPIENT_EMAILS,
@@ -113,4 +117,5 @@ pipeline {
             }
         }
     }
+
 }
