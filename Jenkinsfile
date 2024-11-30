@@ -20,8 +20,9 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
+                echo 'Checking out code...'
                 checkout scm
             }
         }
@@ -30,51 +31,87 @@ pipeline {
             steps {
                 script {
                     withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        echo 'Building Docker image...'
                         def buildStatus = sh(script: """
                             echo "$DOCKER_PASS" | docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin
-                            echo "Building Docker image..."
                             docker build -t ${DOCKER_IMAGE} -f Dockerfile . || exit 1
-                            echo "Pushing Docker image to private repository..."
-                            docker push ${DOCKER_IMAGE} || exit 1
                             docker logout
                         """, returnStatus: true)
 
                         if (buildStatus != 0) {
-                            error "Failed to build or push Docker image: ${DOCKER_IMAGE}."
+                            error "Failed to build Docker image: ${DOCKER_IMAGE}."
                         } else {
-                            echo "Docker image built and pushed successfully: ${DOCKER_IMAGE}."
+                            echo "Docker image built successfully: ${DOCKER_IMAGE}."
                         }
                     }
                 }
             }
         }
 
-        stage('Deploy Docker Container on Deployment Server') {
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        echo 'Pushing Docker image to the repository...'
+                        def pushStatus = sh(script: """
+                            echo "$DOCKER_PASS" | docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin
+                            docker push ${DOCKER_IMAGE} || exit 1
+                            docker logout
+                        """, returnStatus: true)
+
+                        if (pushStatus != 0) {
+                            error "Failed to push Docker image: ${DOCKER_IMAGE}."
+                        } else {
+                            echo "Docker image pushed successfully: ${DOCKER_IMAGE}."
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Pull Docker Image on Deployment Server') {
             agent {
                 label 'QA1'
             }
             steps {
                 script {
                     withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        def deployStatus = sh(script: """
+                        echo 'Pulling Docker image on deployment server...'
+                        def pullStatus = sh(script: """
                             echo "$DOCKER_PASS" | docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin
-                            echo "Checking if the container ${CONTAINER_NAME} is already running..."
-                            
+                            docker pull ${DOCKER_IMAGE} || exit 1
+                            docker logout
+                        """, returnStatus: true)
+
+                        if (pullStatus != 0) {
+                            error "Failed to pull Docker image on deployment server: ${DOCKER_IMAGE}."
+                        } else {
+                            echo "Docker image pulled successfully on deployment server: ${DOCKER_IMAGE}."
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Deploy Docker Container') {
+            agent {
+                label 'QA1'
+            }
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        echo 'Deploying Docker container...'
+                        def deployStatus = sh(script: """
+                            echo "Checking if the container ${CONTAINER_NAME} is running..."
                             if [ \$(docker ps -q -f name=${CONTAINER_NAME}) ]; then
-                                echo "Container ${CONTAINER_NAME} is already running. Stopping and removing it..."
+                                echo "Stopping and removing existing container: ${CONTAINER_NAME}."
                                 docker stop ${CONTAINER_NAME}
                                 docker rm ${CONTAINER_NAME}
                             else
-                                echo "No existing container found with name ${CONTAINER_NAME}."
+                                echo "No running container found with name ${CONTAINER_NAME}."
                             fi
-                            
-                            echo "Pulling Docker image..."
-                            docker pull ${DOCKER_IMAGE} || exit 1
-                            
-                            echo "Starting a new container..."
+                            echo "Starting new Docker container..."
                             docker run --restart ${RESTART_POLICY} --name ${CONTAINER_NAME} --network ${NETWORK_NAME} -p ${HOST_PORT}:${CONTAINER_PORT} -d ${DOCKER_IMAGE} || exit 1
-                            
-                            docker logout
                         """, returnStatus: true)
 
                         if (deployStatus != 0) {
@@ -96,7 +133,7 @@ pipeline {
                 node('QA1') {
                     deploymentIP = sh(script: 'hostname -I | awk \'{print $1}\'', returnStdout: true).trim()
                 }
-    
+
                 echo 'Sending email notification...'
                 emailext(
                     subject: "Jenkins Build Notification: ${currentBuild.currentResult}",
@@ -107,8 +144,7 @@ pipeline {
                       <li>Build Number: ${env.BUILD_NUMBER}</li>
                       <li>Status: ${currentBuild.currentResult}</li>
                       <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li>
-                      <li>Access This App Locally: <a href="http://${deploymentIP}:${HOST_PORT}">http://${deploymentIP}:${HOST_PORT}</a></li>
-                      <li>Access Live Container Log: <a href="http://${deploymentIP}:${HOST_PORT}">http://${deploymentIP}:${HOST_PORT}</a></li>
+                      <li>Application URL: <a href="http://${deploymentIP}:${HOST_PORT}">http://${deploymentIP}:${HOST_PORT}</a></li>
                     </ul>
                     """,
                     to: RECIPIENT_EMAILS,
@@ -118,5 +154,4 @@ pipeline {
             }
         }
     }
-
 }
