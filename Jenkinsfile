@@ -4,18 +4,19 @@ pipeline {
     }
 
     environment {
-        DOCKER_REPO_URL = "registry.apsissolutions.com/dev"
-        DOCKER_HUB_CREDENTIALS = "private-docker-repo"
+        DEPLOYMENT_TYPE = "dev"
         CONTAINER_NAME = "dev-error-page"
         IMAGE_TAG = "latest"
-        DOCKER_IMAGE = "${DOCKER_REPO_URL}/${CONTAINER_NAME}:${IMAGE_TAG}"
         CONTAINER_PORT = "3000"
         HOST_PORT = "3030"
+        RECIPIENT_EMAILS = "report.infra@apsissolutions.com, recipient2@example.com"
+
+        // Don't change below
+        DOCKER_REPO_URL = "registry.apsissolutions.com"
+        DOCKER_IMAGE = "${DOCKER_REPO_URL}/${DEPLOYMENT_TYPE}/${CONTAINER_NAME}:${IMAGE_TAG}"
+        DOCKER_HUB_CREDENTIALS = "private-docker-repo"
         RESTART_POLICY = "always"
         NETWORK_NAME = "bridge"
-        
-        // Email addresses for notifications
-        RECIPIENT_EMAILS = "report.infra@apsissolutions.com, recipient2@example.com"
     }
 
     stages {
@@ -28,16 +29,34 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'private-docker-repo', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh """
-                        echo "Logging in to private Docker registry..."
-                        echo "$DOCKER_PASS" | docker login registry.apsissolutions.com -u "$DOCKER_USER" --password-stdin
-                        echo "Building Docker image..."
-                        docker build -t ${DOCKER_IMAGE} -f Dockerfile .
-                        echo "Pushing Docker image to private repository..."
-                        docker push ${DOCKER_IMAGE}
-                        echo "Docker image pushed successfully: ${DOCKER_IMAGE}"
-                        """
+                    def buildStatus = sh(script: """
+                        docker build -t ${DOCKER_IMAGE} -f Dockerfile . || exit 1
+                    """, returnStatus: true)
+
+                    if (buildStatus != 0) {
+                        error "Docker image build failed for ${DOCKER_IMAGE}."
+                    } else {
+                        echo "Docker image built successfully: ${DOCKER_IMAGE}."
+                    }
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        def pushStatus = sh(script: """
+                            echo "$DOCKER_PASS" | docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin
+                            docker push ${DOCKER_IMAGE} || exit 1
+                            docker logout
+                        """, returnStatus: true)
+
+                        if (pushStatus != 0) {
+                            error "Failed to push Docker image: ${DOCKER_IMAGE}."
+                        } else {
+                            echo "Docker image pushed successfully: ${DOCKER_IMAGE}."
+                        }
                     }
                 }
             }
@@ -49,19 +68,19 @@ pipeline {
             }
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'private-docker-repo', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh """
-                        echo "Logging in to private Docker registry on deployment server..."
-                        echo "$DOCKER_PASS" | docker login registry.apsissolutions.com -u "$DOCKER_USER" --password-stdin
-                        echo "Pulling Docker image..."
-                        docker pull ${DOCKER_IMAGE}
-                        echo "Stopping and removing existing container, if running..."
-                        docker stop ${CONTAINER_NAME} || true
-                        docker rm ${CONTAINER_NAME} || true
-                        echo "Running new Docker container..."
-                        docker run --restart ${RESTART_POLICY} --name ${CONTAINER_NAME} --network ${NETWORK_NAME} -p ${HOST_PORT}:${CONTAINER_PORT} -d ${DOCKER_IMAGE}
-                        echo "Docker container deployed successfully: ${CONTAINER_NAME}"
-                        """
+                    withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        def deployStatus = sh(script: """
+                            echo "$DOCKER_PASS" | docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin
+                            docker pull ${DOCKER_IMAGE} || exit 1
+                            docker run --restart ${RESTART_POLICY} --name ${CONTAINER_NAME} --network ${NETWORK_NAME} -p ${HOST_PORT}:${CONTAINER_PORT} -d ${DOCKER_IMAGE} || exit 1
+                            docker logout
+                        """, returnStatus: true)
+
+                        if (deployStatus != 0) {
+                            error "Failed to deploy Docker container: ${CONTAINER_NAME}."
+                        } else {
+                            echo "Docker container deployed successfully: ${CONTAINER_NAME}."
+                        }
                     }
                 }
             }
@@ -71,24 +90,21 @@ pipeline {
     post {
         always {
             script {
-                // Get agent IP address
                 def agentIP = sh(script: 'hostname -I | awk \'{print $1}\'', returnStdout: true).trim()
-                
-                // Send email notification
                 echo 'Sending email notification...'
                 emailext(
                     subject: "Jenkins Build Notification: ${currentBuild.currentResult}",
                     body: """
-                    <p><b>Build Information:</b></p>
-                    <ul>
-                      <li>Job Name: ${env.JOB_NAME}</li>
-                      <li>Build Number: ${env.BUILD_NUMBER}</li>
-                      <li>Status: ${currentBuild.currentResult}</li>
-                      <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li>
-                      <li>This application is locally hosted on <a href="http://${agentIP}:${HOST_PORT}">http://${agentIP}:${HOST_PORT}</a></li>
-                    </ul>
+                        <p><b>Build Information:</b></p>
+                        <ul>
+                            <li>Job Name: ${env.JOB_NAME}</li>
+                            <li>Build Number: ${env.BUILD_NUMBER}</li>
+                            <li>Status: ${currentBuild.currentResult}</li>
+                            <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li>
+                            <li>Application hosted at: <a href="http://${agentIP}:${HOST_PORT}">http://${agentIP}:${HOST_PORT}</a></li>
+                        </ul>
                     """,
-                    to: "${RECIPIENT_EMAILS}",
+                    to: RECIPIENT_EMAILS,
                     mimeType: 'text/html',
                     attachLog: true
                 )
