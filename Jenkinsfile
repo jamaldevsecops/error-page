@@ -60,7 +60,7 @@ pipeline {
                     echo 'Running Trivy scan...'
                     sh 'env'
                     def scanStatus = sh(script: """
-                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table registry.apsissolutions.com/dev/dev-error-page:latest > ${TRIVY_REPORT}
+                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table registry.apsissolutions.com/dev/dev-error-page:latest > /tmp/${TRIVY_REPORT}
                     """, returnStatus: true)
         
                     // Debug: Check if the report file exists and its content
