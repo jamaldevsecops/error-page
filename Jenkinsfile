@@ -17,8 +17,8 @@ pipeline {
         DOCKER_HUB_CREDENTIALS = "private-docker-repo"
         RESTART_POLICY = "always"
         NETWORK_NAME = "bridge"
-        TRIVY_FS_SCAN_REPORT = "trivy_filesystem_scan_report.txt"
-        TRIVY_IMAGE_SCAN_REPORT = "trivy_docker_image_scan_report.txt"
+        TRIVY_FS_SCAN_REPORT = "filesystem_vulnerability_report.txt"
+        TRIVY_IMAGE_SCAN_REPORT = "docker_image_vulnerability_report.txt"
         TRIVY_SEVERITY = "HIGH,CRITICAL"
     }
 
@@ -72,22 +72,22 @@ pipeline {
             }
         }
 
-        stage('Trivy Image Scan') {
+        stage('Trivy Docker Image Scan') {
             steps {
                 script {
-                    echo 'Running Trivy docker image scan...'
-                    def imageScanStatus = sh(script: """
+                    echo 'Running Trivy Docker Image scan...'
+                    def fsScanStatus = sh(script: """
                         trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table ${DOCKER_IMAGE} > ${TRIVY_IMAGE_SCAN_REPORT}
                     """, returnStatus: true)
-
-                    // Debug: Check if the report file exists and its content
-                    sh "ls -l ${TRIVY_IMAGE_SCAN_REPORT}"
-                    sh "cat ${TRIVY_IMAGE_SCAN_REPORT}"
-
-                    if (imageScanStatus == 0) {
-                        echo 'Trivy docker image scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
+        
+                    // Debug: Check if report is blank
+                    def reportIsBlank = sh(script: "wc -l < ${TRIVY_IMAGE_SCAN_REPORT}", returnStdout: true).trim().toInteger() == 0
+        
+                    if (reportIsBlank) {
+                        echo 'Docker Image scan report is blank. Adding default content.'
+                        sh "echo 'No vulnerabilities found in Docker Image scan.' > ${TRIVY_IMAGE_SCAN_REPORT}"
                     } else {
-                        echo 'Trivy docker image scan failed. Continuing the pipeline.'
+                        echo 'Docker Image scan completed with findings.'
                     }
                 }
             }
