@@ -145,7 +145,7 @@ pipeline {
                       <li>Status: ${currentBuild.currentResult}</li>
                       <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li>
                       <li>Access This App Locally: <a href="http://${deploymentIP}:${HOST_PORT}">http://${deploymentIP}:${HOST_PORT}</a></li>
-                      <li>Access Live Container Log: <a href="http://${deploymentIP}:${HOST_PORT}">http://${deploymentIP}:${HOST_PORT}</a></li>
+                      <li>Access Live Container Log: <a href="http://${deploymentIP}:8080">http://${deploymentIP}:8080</a></li>
                     </ul>
                     """,
                     to: RECIPIENT_EMAILS,
