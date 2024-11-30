@@ -55,7 +55,6 @@ pipeline {
                 script {
                     echo 'Running Trivy scan...'
                     def scanStatus = sh(script: """
-                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table --output ${TRIVY_REPORT} ${DOCKER_IMAGE}
                         trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table ${DOCKER_IMAGE} > ${TRIVY_REPORT}
                     """, returnStatus: true)
         
