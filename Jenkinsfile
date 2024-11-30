@@ -17,6 +17,8 @@ pipeline {
         DOCKER_HUB_CREDENTIALS = "private-docker-repo"
         RESTART_POLICY = "always"
         NETWORK_NAME = "bridge"
+        TRIVY_REPORT = "trivy_scan_report.txt"
+        TRIVY_SEVERITY = "HIGH,CRITICAL"
     }
 
     stages {
@@ -43,6 +45,23 @@ pipeline {
                         } else {
                             echo "Docker image built successfully: ${DOCKER_IMAGE}."
                         }
+                    }
+                }
+            }
+        }
+
+        stage('Trivy Scan') {
+            steps {
+                script {
+                    echo 'Running Trivy scan...'
+                    def scanStatus = sh(script: """
+                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table --output ${TRIVY_REPORT} ${DOCKER_IMAGE}
+                    """, returnStatus: true)
+
+                    if (scanStatus == 0) {
+                        echo 'Trivy scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
+                    } else {
+                        echo 'Trivy scan failed. Continuing the pipeline.'
                     }
                 }
             }
@@ -133,7 +152,7 @@ pipeline {
                 node('QA1') {
                     deploymentIP = sh(script: 'hostname -I | awk \'{print $1}\'', returnStdout: true).trim()
                 }
-    
+
                 echo 'Sending email notification...'
                 emailext(
                     subject: "Jenkins Build Notification: ${currentBuild.currentResult}",
@@ -145,12 +164,15 @@ pipeline {
                       <li>Status: ${currentBuild.currentResult}</li>
                       <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li>
                       <li>Access This App Locally: <a href="http://${deploymentIP}:${HOST_PORT}">http://${deploymentIP}:${HOST_PORT}</a></li>
-                      <li>Access Live Container Log: <a href="http://${deploymentIP}:8080">http://${deploymentIP}:8080</a></li>
+                      <li>Access Live App Log: <a href="http://${deploymentIP}:8080">http://${deploymentIP}:8080</a></li>
                     </ul>
+                    <p><b>Trivy Vulnerability Scan Report:</b></p>
+                    <p>See the attached Trivy scan report for details on vulnerabilities found in the Docker image.</p>
                     """,
                     to: RECIPIENT_EMAILS,
                     mimeType: 'text/html',
-                    attachLog: true
+                    attachLog: true,
+                    attachmentsPattern: TRIVY_REPORT
                 )
             }
         }
