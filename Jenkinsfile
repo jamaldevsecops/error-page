@@ -58,6 +58,9 @@ pipeline {
                         trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table --output ${TRIVY_REPORT} ${DOCKER_IMAGE}
                     """, returnStatus: true)
 
+                    // Debug: Check if the report file exists
+                    sh "ls -l ${TRIVY_REPORT}"
+
                     if (scanStatus == 0) {
                         echo 'Trivy scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
                     } else {
@@ -172,7 +175,7 @@ pipeline {
                     to: RECIPIENT_EMAILS,
                     mimeType: 'text/html',
                     attachLog: true,
-                    attachmentsPattern: TRIVY_REPORT
+                    attachmentsPattern: "${TRIVY_REPORT}" // Ensure this matches the file path
                 )
             }
         }
