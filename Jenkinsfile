@@ -54,24 +54,28 @@ pipeline {
         stage('Trivy Scan') {
             steps {
                 script {
-                    echo 'Running Trivy scan...'
-                    sh 'env'
+                    echo 'Running Trivy scan for the Docker image...'
+                    
+                    // Run Trivy scan and write the output to a report file
                     def scanStatus = sh(script: """
-                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table ${DOCKER_IMAGE} > ${TRIVY_IMAGE_SCAN_REPORT}
+                        mkdir -p /tmp/${CONTAINER_NAME} && \
+                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --format table ${DOCKER_IMAGE} > ${TRIVY_IMAGE_SCAN_REPORT}
                     """, returnStatus: true)
-
-                    // Debug: Check if the report file exists and its content
+                    
+                    // Debugging: Check the existence of the scan report file
+                    echo "Verifying the Trivy scan report file..."
                     sh "ls -l ${TRIVY_IMAGE_SCAN_REPORT}"
                     sh "cat ${TRIVY_IMAGE_SCAN_REPORT}"
-
+                    
                     if (scanStatus == 0) {
-                        echo 'Trivy docker image scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
+                        echo 'Trivy Docker image scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
                     } else {
-                        echo 'Trivy docker image scan failed. Continuing the pipeline.'
+                        echo 'Trivy Docker image scan failed. The pipeline will continue, but ensure to review the scan report.'
                     }
                 }
             }
         }
+
 
         stage('Push Docker Image') {
             steps {
@@ -153,13 +157,13 @@ pipeline {
     post {
         always {
             script {
-                // Retrieve the IP address of the deployment server
+                // Get the deployment server's IP address
                 def deploymentIP = ''
                 node('QA1') {
                     deploymentIP = sh(script: 'hostname -I | awk \'{print $1}\'', returnStdout: true).trim()
                 }
-
-                echo 'Sending email notification...'
+    
+                echo 'Sending email notification with Trivy scan reports...'
                 emailext(
                     subject: "Jenkins Build Notification: ${currentBuild.currentResult}",
                     body: """
@@ -172,15 +176,15 @@ pipeline {
                       <li>Access This App Locally: <a href="http://${deploymentIP}:${HOST_PORT}">http://${deploymentIP}:${HOST_PORT}</a></li>
                       <li>Access Live App Log: <a href="http://${deploymentIP}:8080">http://${deploymentIP}:8080</a></li>
                     </ul>
-                    <p><b>Trivy Vulnerability Scan Report:</b></p>
-                    <p>See the attached Trivy scan report for details on vulnerabilities found in the Docker image.</p>
+                    <p><b>Trivy Vulnerability Scan Report:</b> See the attached Trivy scan report for details on vulnerabilities found in the Docker image.</p>
                     """,
                     to: RECIPIENT_EMAILS,
                     mimeType: 'text/html',
                     attachLog: true,
-                    attachmentsPattern: "${TRIVY_IMAGE_SCAN_REPORT}, ${TRIVY_FS_SCAN_REPORT}" // Ensure this matches the file path
+                    attachmentsPattern: "${TRIVY_IMAGE_SCAN_REPORT}" // Ensure this matches the file path
                 )
             }
         }
     }
+
 }
