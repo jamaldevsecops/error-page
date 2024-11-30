@@ -10,14 +10,15 @@ pipeline {
         CONTAINER_PORT = "3000"
         HOST_PORT = "3030"
         RECIPIENT_EMAILS = "report.infra@apsissolutions.com, recipient2@example.com"
-        TRIVY_SEVERITY = "HIGH,CRITICAL"
-        TRIVY_REPORT = "trivy_scan_report.txt"
 
+        // DO NOT CHANGE BELOW
         DOCKER_REPO_URL = "registry.apsissolutions.com"
         DOCKER_IMAGE = "${DOCKER_REPO_URL}/${DEPLOYMENT_TYPE}/${CONTAINER_NAME}:${IMAGE_TAG}"
         DOCKER_HUB_CREDENTIALS = "private-docker-repo"
         RESTART_POLICY = "always"
         NETWORK_NAME = "bridge"
+        TRIVY_REPORT = "trivy_scan_report.txt"
+        TRIVY_SEVERITY = "HIGH,CRITICAL"
     }
 
     stages {
@@ -33,11 +34,17 @@ pipeline {
                 script {
                     withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         echo 'Building Docker image...'
-                        sh """
+                        def buildStatus = sh(script: """
                             echo "$DOCKER_PASS" | docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin
-                            docker build -t ${DOCKER_IMAGE} -f Dockerfile .
+                            docker build -t ${DOCKER_IMAGE} -f Dockerfile . || exit 1
                             docker logout
-                        """
+                        """, returnStatus: true)
+
+                        if (buildStatus != 0) {
+                            error "Failed to build Docker image: ${DOCKER_IMAGE}."
+                        } else {
+                            echo "Docker image built successfully: ${DOCKER_IMAGE}."
+                        }
                     }
                 }
             }
@@ -47,23 +54,18 @@ pipeline {
             steps {
                 script {
                     echo 'Running Trivy scan...'
-                    
-                    // Run Trivy and capture the output
-                    def trivyOutput = sh(script: """
-                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --format table ${DOCKER_IMAGE}
-                    """, returnStdout: true).trim()
-                    
-                    // Save the output to a file
-                    writeFile file: "${TRIVY_REPORT}", text: trivyOutput
-                    
-                    // Display the scan results in the console
-                    echo "Trivy Scan Results:\n${trivyOutput}"
-                    
-                    // Check if vulnerabilities were found
-                    if (trivyOutput.contains("VULNERABILITIES")) {
-                        echo "Vulnerabilities found in the Docker image."
+                    def scanStatus = sh(script: """
+                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table --output ${TRIVY_REPORT} ${DOCKER_IMAGE}
+                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table ${DOCKER_IMAGE} > ${TRIVY_REPORT}
+                    """, returnStatus: true)
+        
+                    // Debug: Check if the report file exists
+                    sh "ls -l ${TRIVY_REPORT}"
+        
+                    if (scanStatus == 0) {
+                        echo 'Trivy scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
                     } else {
-                        echo "No vulnerabilities found in the Docker image."
+                        echo 'Trivy scan failed. Continuing the pipeline.'
                     }
                 }
             }
@@ -74,11 +76,41 @@ pipeline {
                 script {
                     withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         echo 'Pushing Docker image to the repository...'
-                        sh """
+                        def pushStatus = sh(script: """
                             echo "$DOCKER_PASS" | docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin
-                            docker push ${DOCKER_IMAGE}
+                            docker push ${DOCKER_IMAGE} || exit 1
                             docker logout
-                        """
+                        """, returnStatus: true)
+
+                        if (pushStatus != 0) {
+                            error "Failed to push Docker image: ${DOCKER_IMAGE}."
+                        } else {
+                            echo "Docker image pushed successfully: ${DOCKER_IMAGE}."
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Pull Docker Image on Deployment Server') {
+            agent {
+                label 'QA1'
+            }
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        echo 'Pulling Docker image on deployment server...'
+                        def pullStatus = sh(script: """
+                            echo "$DOCKER_PASS" | docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin
+                            docker pull ${DOCKER_IMAGE} || exit 1
+                            docker logout
+                        """, returnStatus: true)
+
+                        if (pullStatus != 0) {
+                            error "Failed to pull Docker image on deployment server: ${DOCKER_IMAGE}."
+                        } else {
+                            echo "Docker image pulled successfully on deployment server: ${DOCKER_IMAGE}."
+                        }
                     }
                 }
             }
@@ -90,12 +122,27 @@ pipeline {
             }
             steps {
                 script {
-                    echo 'Deploying Docker container...'
-                    sh """
-                        docker stop ${CONTAINER_NAME} || true
-                        docker rm ${CONTAINER_NAME} || true
-                        docker run --restart ${RESTART_POLICY} --name ${CONTAINER_NAME} --network ${NETWORK_NAME} -p ${HOST_PORT}:${CONTAINER_PORT} -d ${DOCKER_IMAGE}
-                    """
+                    withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        echo 'Deploying Docker container...'
+                        def deployStatus = sh(script: """
+                            echo "Checking if the container ${CONTAINER_NAME} is running..."
+                            if [ \$(docker ps -q -f name=${CONTAINER_NAME}) ]; then
+                                echo "Stopping and removing existing container: ${CONTAINER_NAME}."
+                                docker stop ${CONTAINER_NAME}
+                                docker rm ${CONTAINER_NAME}
+                            else
+                                echo "No running container found with name ${CONTAINER_NAME}."
+                            fi
+                            echo "Starting new Docker container..."
+                            docker run --restart ${RESTART_POLICY} --name ${CONTAINER_NAME} --network ${NETWORK_NAME} -p ${HOST_PORT}:${CONTAINER_PORT} -d ${DOCKER_IMAGE} || exit 1
+                        """, returnStatus: true)
+
+                        if (deployStatus != 0) {
+                            error "Failed to deploy Docker container: ${CONTAINER_NAME}."
+                        } else {
+                            echo "Docker container deployed successfully: ${CONTAINER_NAME}."
+                        }
+                    }
                 }
             }
         }
@@ -104,6 +151,12 @@ pipeline {
     post {
         always {
             script {
+                // Retrieve the IP address of the deployment server
+                def deploymentIP = ''
+                node('QA1') {
+                    deploymentIP = sh(script: 'hostname -I | awk \'{print $1}\'', returnStdout: true).trim()
+                }
+
                 echo 'Sending email notification...'
                 emailext(
                     subject: "Jenkins Build Notification: ${currentBuild.currentResult}",
@@ -114,12 +167,16 @@ pipeline {
                       <li>Build Number: ${env.BUILD_NUMBER}</li>
                       <li>Status: ${currentBuild.currentResult}</li>
                       <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li>
+                      <li>Access This App Locally: <a href="http://${deploymentIP}:${HOST_PORT}">http://${deploymentIP}:${HOST_PORT}</a></li>
+                      <li>Access Live App Log: <a href="http://${deploymentIP}:8080">http://${deploymentIP}:8080</a></li>
                     </ul>
-                    <p><b>Trivy Report:</b> See the attachment for details.</p>
+                    <p><b>Trivy Vulnerability Scan Report:</b></p>
+                    <p>See the attached Trivy scan report for details on vulnerabilities found in the Docker image.</p>
                     """,
                     to: RECIPIENT_EMAILS,
                     mimeType: 'text/html',
-                    attachmentsPattern: "${TRIVY_REPORT}"
+                    attachLog: true,
+                    attachmentsPattern: "${TRIVY_REPORT}" // Ensure this matches the file path
                 )
             }
         }
