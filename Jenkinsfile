@@ -17,7 +17,7 @@ pipeline {
         DOCKER_HUB_CREDENTIALS = "private-docker-repo"
         RESTART_POLICY = "always"
         NETWORK_NAME = "bridge"
-        TRIVY_FS_SCAN_REPORT= "/tmp/${CONTAINER_NAME}/trivy_filesystem_scan_report.txt"
+        TRIVY_FS_SCAN_REPORT = "trivy_filesystem_scan_report.txt"
         TRIVY_IMAGE_SCAN_REPORT = "trivy_docker_image_scan_report.txt"
         TRIVY_SEVERITY = "HIGH,CRITICAL"
     }
@@ -27,6 +27,27 @@ pipeline {
             steps {
                 echo 'Checking out code...'
                 checkout scm
+            }
+        }
+
+        stage('Trivy Filesystem Scan') {
+            steps {
+                script {
+                    echo 'Running Trivy filesystem scan...'
+                    def fsScanStatus = sh(script: """
+                        trivy fs --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table . > ${TRIVY_FS_SCAN_REPORT}
+                    """, returnStatus: true)
+
+                    // Debug: Check if the report file exists and its content
+                    sh "ls -l ${TRIVY_FS_SCAN_REPORT}"
+                    sh "cat ${TRIVY_FS_SCAN_REPORT}"
+
+                    if (fsScanStatus == 0) {
+                        echo 'Trivy filesystem scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
+                    } else {
+                        echo 'Trivy filesystem scan failed. Continuing the pipeline.'
+                    }
+                }
             }
         }
 
@@ -51,24 +72,22 @@ pipeline {
             }
         }
 
-        stage('Trivy Scan') {
+        stage('Trivy Image Scan') {
             steps {
                 script {
-                    echo 'Running Trivy scan for the Docker image...'
-                    
-                    // Run Trivy scan and write the output to a report file in the workspace
-                    def scanStatus = sh(script: """
-                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --format table ${DOCKER_IMAGE} > ${TRIVY_IMAGE_SCAN_REPORT}
+                    echo 'Running Trivy docker image scan...'
+                    def imageScanStatus = sh(script: """
+                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table ${DOCKER_IMAGE} > ${TRIVY_IMAGE_SCAN_REPORT}
                     """, returnStatus: true)
-                    
-                    // Verify the report file
+
+                    // Debug: Check if the report file exists and its content
                     sh "ls -l ${TRIVY_IMAGE_SCAN_REPORT}"
                     sh "cat ${TRIVY_IMAGE_SCAN_REPORT}"
-                    
-                    if (scanStatus == 0) {
-                        echo 'Trivy Docker image scan completed successfully.'
+
+                    if (imageScanStatus == 0) {
+                        echo 'Trivy docker image scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
                     } else {
-                        echo 'Trivy Docker image scan failed. Review the report for details.'
+                        echo 'Trivy docker image scan failed. Continuing the pipeline.'
                     }
                 }
             }
@@ -154,13 +173,13 @@ pipeline {
     post {
         always {
             script {
-                // Get the deployment server's IP address
+                // Retrieve the IP address of the deployment server
                 def deploymentIP = ''
                 node('QA1') {
                     deploymentIP = sh(script: 'hostname -I | awk \'{print $1}\'', returnStdout: true).trim()
                 }
-    
-                echo 'Sending email notification with Trivy scan reports...'
+
+                echo 'Sending email notification...'
                 emailext(
                     subject: "Jenkins Build Notification: ${currentBuild.currentResult}",
                     body: """
@@ -173,15 +192,15 @@ pipeline {
                       <li>Access This App Locally: <a href="http://${deploymentIP}:${HOST_PORT}">http://${deploymentIP}:${HOST_PORT}</a></li>
                       <li>Access Live App Log: <a href="http://${deploymentIP}:8080">http://${deploymentIP}:8080</a></li>
                     </ul>
-                    <p><b>Trivy Vulnerability Scan Report:</b> See the attached Trivy scan report for details on vulnerabilities found in the Docker image.</p>
+                    <p><b>Trivy Vulnerability Scan Reports:</b></p>
+                    <p>See the attached Trivy scan reports for details on vulnerabilities found in the Docker image and filesystem.</p>
                     """,
                     to: RECIPIENT_EMAILS,
                     mimeType: 'text/html',
                     attachLog: true,
-                    attachmentsPattern: "${env.TRIVY_IMAGE_SCAN_REPORT}" // Ensure this matches the file path
+                    attachmentsPattern: "${env.TRIVY_IMAGE_SCAN_REPORT},${env.TRIVY_FS_SCAN_REPORT}"
                 )
             }
         }
     }
-
 }
