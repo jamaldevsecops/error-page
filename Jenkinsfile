@@ -43,7 +43,7 @@ pipeline {
         
                     if (reportIsBlank) {
                         echo 'Filesystem scan report is blank. Adding default content.'
-                        sh "echo 'No vulnerabilities found in filesystem scan.' > ${TRIVY_FS_SCAN_REPORT}"
+                        sh "echo 'No high or critical vulnerabilities found in filesystem scan.' > ${TRIVY_FS_SCAN_REPORT}"
                     } else {
                         echo 'Filesystem scan completed with findings.'
                     }
@@ -85,7 +85,7 @@ pipeline {
         
                     if (reportIsBlank) {
                         echo 'Docker Image scan report is blank. Adding default content.'
-                        sh "echo 'No vulnerabilities found in Docker Image scan.' > ${TRIVY_IMAGE_SCAN_REPORT}"
+                        sh "echo 'No hight or critical vulnerabilities found in Docker Image scan.' > ${TRIVY_IMAGE_SCAN_REPORT}"
                     } else {
                         echo 'Docker Image scan completed with findings.'
                     }
