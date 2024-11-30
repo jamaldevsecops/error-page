@@ -56,13 +56,13 @@ pipeline {
                     echo 'Running Trivy scan...'
                     def scanStatus = sh(script: """
                         trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table ${DOCKER_IMAGE} > ${TRIVY_REPORT}
-                        cat ${TRIVY_REPORT} # Print the report to the console for verification
+                        cat ${TRIVY_REPORT} # Display the report in the console
                     """, returnStatus: true)
         
                     if (scanStatus == 0) {
                         echo 'Trivy scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
                     } else {
-                        echo 'Trivy scan failed. Continuing the pipeline.'
+                        echo 'Trivy scan encountered issues but the pipeline will continue.'
                     }
                 }
             }
