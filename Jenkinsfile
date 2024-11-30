@@ -28,27 +28,33 @@ pipeline {
                 checkout scm
             }
         }
-
-        stage('Build Docker Image') {
+        
+        stage('Trivy Scan') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        echo 'Building Docker image...'
-                        def buildStatus = sh(script: """
-                            echo "$DOCKER_PASS" | docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin
-                            docker build -t ${DOCKER_IMAGE} -f Dockerfile . || exit 1
-                            docker logout
-                        """, returnStatus: true)
-
-                        if (buildStatus != 0) {
-                            error "Failed to build Docker image: ${DOCKER_IMAGE}."
-                        } else {
-                            echo "Docker image built successfully: ${DOCKER_IMAGE}."
-                        }
+                    echo 'Running Trivy scan...'
+                    
+                    // Run Trivy and capture the output
+                    def trivyOutput = sh(script: """
+                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --format table ${DOCKER_IMAGE}
+                    """, returnStdout: true).trim()
+                    
+                    // Save the output to a file
+                    writeFile file: "${TRIVY_REPORT}", text: trivyOutput
+                    
+                    // Display the scan results in the console
+                    echo "Trivy Scan Results:\n${trivyOutput}"
+                    
+                    // Check if vulnerabilities were found
+                    if (trivyOutput.contains("VULNERABILITIES")) {
+                        echo "Vulnerabilities found in the Docker image."
+                    } else {
+                        echo "No vulnerabilities found in the Docker image."
                     }
                 }
             }
         }
+
         
         stage('Trivy Scan') {
             steps {
