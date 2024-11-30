@@ -66,6 +66,7 @@ pipeline {
                     // Debug: Check if the report file exists and its content
                     sh "ls -l ${TRIVY_REPORT}"
                     sh "cat ${TRIVY_REPORT}"
+                    sh "touch /tmp/testfile_jamal"
         
                     if (scanStatus == 0) {
                         echo 'Trivy scan completed successfully. Vulnerabilities found but the pipeline will not fail.'
