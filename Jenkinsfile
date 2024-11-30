@@ -39,6 +39,7 @@ pipeline {
                     """, returnStatus: true)
 
                     // Debug: Check if the report file exists and its content
+                    sh "pwd"
                     sh "ls -l ${TRIVY_FS_SCAN_REPORT}"
                     sh "cat ${TRIVY_FS_SCAN_REPORT}"
                     sh "trivy fs --no-progress --exit-code 0 --format table ."
