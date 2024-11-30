@@ -35,7 +35,8 @@ pipeline {
                 script {
                     echo 'Running Trivy filesystem scan...'
                     def fsScanStatus = sh(script: """
-                        trivy fs --scanners vuln --no-progress --exit-code 0 --format table . > ${TRIVY_FS_SCAN_REPORT}
+                        trivy fs --no-progress --exit-code 0 --format table . > ${TRIVY_FS_SCAN_REPORT}
+                        #//trivy fs --scanners vuln --no-progress --exit-code 0 --format table . > ${TRIVY_FS_SCAN_REPORT}
                     """, returnStatus: true)
 
                     // Debug: Check if the report file exists and its content
