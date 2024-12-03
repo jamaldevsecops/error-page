@@ -4,16 +4,16 @@ pipeline {
     }
 
     environment {
-        DEPLOYMENT_TYPE = "staging"
-        CONTAINER_NAME = "staging-crm-issue-tracker-backend"
+        DEPLOYMENT_TYPE = "dev"
+        CONTAINER_NAME = "dev-error-page"
         IMAGE_TAG = "latest"
-        CONTAINER_PORT = "8020"
-        HOST_PORT = "9020"
-        RECIPIENT_EMAILS = "report.infra@apsissolutions.com, recipient2@example.com"
+        CONTAINER_PORT = "3000"
+        HOST_PORT = "3030"
+        RECIPIENT_EMAILS = "jamal.hossain@apsissolutions.com"
 
         FTP_HOST = "192.168.10.50:21"
-        FTP_PATH = "/ENV_FILE/crm-issue-tracker/staging/crm-issue-tracker-backend"
-        LOCAL_PATH = "./"
+        FTP_PATH = "/ENV_FILE/crm-issue-tracker/staging/crm-issue-tracker-backend/.env"
+        LOCAL_PATH = "."
 
         // DO NOT CHANGE BELOW
         DOCKER_REPO_URL = "registry.apsissolutions.com"
@@ -40,7 +40,7 @@ pipeline {
                     echo 'Downloading .env file from FTP...'
                     withCredentials([usernamePassword(credentialsId: 'crm-ftp-credentials', usernameVariable: 'FTP_USER', passwordVariable: 'FTP_PASSWORD')]) {
                         def ftpStatus = sh(script: '''
-                            wget --ftp-user="$FTP_USER" --ftp-password="$FTP_PASSWORD" --passive-ftp "ftp://$FTP_HOST$FTP_PATH/.env" -P "$LOCAL_PATH"
+                            curl -u "$FTP_USER":"$FTP_PASSWORD" "ftp://$FTP_HOST$FTP_PATH" -o "$LOCAL_PATH"/.env
                         ''', returnStatus: true)
 
                         if (ftpStatus != 0) {
@@ -183,9 +183,18 @@ pipeline {
                 )
             }
         }
+
         failure {
             script {
-                echo 'Sending failure email with build log...'
+                def failedStage = ''
+                try {
+                    failedStage = currentBuild.rawBuild.getExecution().getCurrentExecutions().get(0).getDisplayName()
+                } catch (Exception e) {
+                    failedStage = 'Unknown stage'
+                }
+
+                echo "Build failed at stage: ${failedStage}"
+                
                 emailext(
                     subject: "Jenkins Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                     body: """
@@ -193,6 +202,7 @@ pipeline {
                     <ul>
                         <li>Job Name: ${env.JOB_NAME}</li>
                         <li>Build Number: ${env.BUILD_NUMBER}</li>
+                        <li>Failed Stage: ${failedStage}</li>
                         <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li>
                     </ul>
                     <p>See the attached build log for details.</p>
