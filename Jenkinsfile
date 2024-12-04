@@ -12,7 +12,7 @@ pipeline {
         RECIPIENT_EMAILS = "jamal.hossain@apsissolutions.com"
 
         FTP_HOST = "192.168.10.50:21"
-        FTP_PATH = "/ENV_FILE/crm-issue-tracker/staging/crm-issue-tracker-backend"
+        FTP_PATH = "/ENV_FILE/crm-issue-tracker/staging/crm-issue-tracker-frontend"
         LOCAL_PATH = "."
 
         // DO NOT CHANGE BELOW
@@ -76,7 +76,7 @@ pipeline {
                         echo 'Building Docker image...'
                         sh """
                             echo "$DOCKER_PASS" | docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin
-                            docker build -t ${DOCKER_IMAGE} -f Dockerfile-staging . || exit 1
+                            docker build -t ${DOCKER_IMAGE} -f Dockerfile . || exit 1
                             docker logout ${DOCKER_REPO_URL}
                         """
                     }
@@ -183,7 +183,6 @@ pipeline {
                 )
             }
         }
-        
         failure {
             script {
                 echo 'Sending failure email with build log...'
