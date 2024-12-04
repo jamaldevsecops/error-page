@@ -183,18 +183,10 @@ pipeline {
                 )
             }
         }
-
+        
         failure {
             script {
-                def failedStage = ''
-                try {
-                    failedStage = currentBuild.rawBuild.getExecution().getCurrentExecutions().get(0).getDisplayName()
-                } catch (Exception e) {
-                    failedStage = 'Unknown stage'
-                }
-
-                echo "Build failed at stage: ${failedStage}"
-                
+                echo 'Sending failure email with build log...'
                 emailext(
                     subject: "Jenkins Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                     body: """
@@ -202,7 +194,6 @@ pipeline {
                     <ul>
                         <li>Job Name: ${env.JOB_NAME}</li>
                         <li>Build Number: ${env.BUILD_NUMBER}</li>
-                        <li>Failed Stage: ${failedStage}</li>
                         <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li>
                     </ul>
                     <p>See the attached build log for details.</p>
