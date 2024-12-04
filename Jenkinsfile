@@ -12,7 +12,7 @@ pipeline {
         RECIPIENT_EMAILS = "jamal.hossain@apsissolutions.com"
 
         FTP_HOST = "192.168.10.50:21"
-        FTP_PATH = "/ENV_FILE/crm-issue-tracker/staging/crm-issue-tracker-backend/.env"
+        FTP_PATH = "/ENV_FILE/crm-issue-tracker/staging/crm-issue-tracker-backend"
         LOCAL_PATH = "."
 
         // DO NOT CHANGE BELOW
@@ -40,7 +40,7 @@ pipeline {
                     echo 'Downloading .env file from FTP...'
                     withCredentials([usernamePassword(credentialsId: 'crm-ftp-credentials', usernameVariable: 'FTP_USER', passwordVariable: 'FTP_PASSWORD')]) {
                         def ftpStatus = sh(script: '''
-                            curl -u "$FTP_USER":"$FTP_PASSWORD" "ftp://$FTP_HOST$FTP_PATH" -o "$LOCAL_PATH"/.env
+                            curl -u "$FTP_USER":"$FTP_PASSWORD" "ftp://$FTP_HOST$FTP_PATH/.env" -o "$LOCAL_PATH"/.env
                         ''', returnStatus: true)
 
                         if (ftpStatus != 0) {
