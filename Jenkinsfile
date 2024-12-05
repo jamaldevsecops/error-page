@@ -34,7 +34,7 @@ pipeline {
             }
         }
 
-        stage('Download .env File') {
+/*        stage('Download .env File') {
             steps {
                 script {
                     echo 'Downloading .env file from FTP...'
@@ -52,6 +52,7 @@ pipeline {
                 }
             }
         }
+    */
 
         stage('Trivy Filesystem Scan') {
             steps {
