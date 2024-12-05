@@ -117,7 +117,7 @@ pipeline {
 
         stage('Pull Docker Image on Deployment Server') {
             agent {
-                label 'CRM-DEV' // Deployment server node
+                label 'ERP-DEV' // Deployment server node
             }
             steps {
                 script {
