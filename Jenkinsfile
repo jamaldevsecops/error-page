@@ -143,7 +143,7 @@ pipeline {
 
                         echo 'Deploying Docker container...'
                         sh """
-                            docker run --restart ${RESTART_POLICY} --name ${CONTAINER_NAME} --network ${NETWORK_NAME} -p ${HOST_PORT}:${CONTAINER_PORT} -d ${DOCKER_IMAGE}
+                            docker run --detach --restart ${RESTART_POLICY} --name ${CONTAINER_NAME} --network ${NETWORK_NAME} --publish 192.168.10.254:${HOST_PORT}:${CONTAINER_PORT} --memory=512m --cpus="1" --security-opt no-new-privileges ${DOCKER_IMAGE}
                         """
                     }
 
