@@ -10,7 +10,9 @@ ARG NODE_VERSION=16.13.2
 
 FROM node:${NODE_VERSION}-alpine
 
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD curl -f http://localhost:3000 || exit 1
+ENV CADVISOR_HEALTHCHECK_URL=http://localhost:3000/healthz
+HEALTHCHECK --interval=30s --timeout=3s \
+  CMD wget --quiet --tries=1 --spider $CADVISOR_HEALTHCHECK_URL || exit 1
 
 
 # Use production node environment by default.
