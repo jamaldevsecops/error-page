@@ -10,6 +10,9 @@ ARG NODE_VERSION=16.13.2
 
 FROM node:${NODE_VERSION}-alpine
 
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD curl -f http://localhost:3000/health || exit 1
+
+
 # Use production node environment by default.
 ENV NODE_ENV development
 
