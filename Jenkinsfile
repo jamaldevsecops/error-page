@@ -154,6 +154,7 @@ pipeline {
                             -p ${DEPLOYMENT_IP}:${HOST_PORT}:${CONTAINER_PORT} \
                             --memory 512m --cpus 1.0 \
                             --security-opt no-new-privileges:true \
+                            --pids-limit 100 \
                             -d ${DOCKER_IMAGE}
                         """
                     }
