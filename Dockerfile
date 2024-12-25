@@ -10,7 +10,7 @@ ARG NODE_VERSION=16.13.2
 
 FROM node:${NODE_VERSION}-alpine
 
-ENV HEALTHCHECK_URL=http://localhost:3000/healthz
+ENV HEALTHCHECK_URL=http://localhost:3000
 HEALTHCHECK --interval=30s --timeout=3s \
   CMD wget --quiet --tries=1 --spider $HEALTHCHECK_URL || exit 1
 
