@@ -121,6 +121,13 @@ pipeline {
             }
             steps {
                 script {
+                    // Retrieve the IP address of the deployment server
+                    def deploymentIP = sh(script: 'hostname -I | awk \'{print $1}\'', returnStdout: true).trim()
+                    echo "Deployment server IP: ${deploymentIP}"
+
+                    // Save the deploymentIP in the environment variable for the post stage
+                    env.DEPLOYMENT_IP = deploymentIP
+                    
                     withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         echo 'Pulling Docker image on the deployment server...'
                         sh """
@@ -143,16 +150,14 @@ pipeline {
 
                         echo 'Deploying Docker container...'
                         sh """
-                            docker run --detach --restart ${RESTART_POLICY} --name ${CONTAINER_NAME} --network ${NETWORK_NAME} --publish 192.168.10.254:${HOST_PORT}:${CONTAINER_PORT} --memory=512m --cpus="1" --security-opt no-new-privileges ${DOCKER_IMAGE}
+                            docker run --restart ${RESTART_POLICY} --name ${CONTAINER_NAME} --network ${NETWORK_NAME} \
+                            -p ${DEPLOYMENT_IP}:${HOST_PORT}:${CONTAINER_PORT} \
+                            --memory 512m --cpus 1.0 \
+                            --security-opt no-new-privileges:true \
+                            -d ${DOCKER_IMAGE}
                         """
                     }
 
-                    // Retrieve the IP address of the deployment server
-                    def deploymentIP = sh(script: 'hostname -I | awk \'{print $1}\'', returnStdout: true).trim()
-                    echo "Deployment server IP: ${deploymentIP}"
-
-                    // Save the deploymentIP in the environment variable for the post stage
-                    env.DEPLOYMENT_IP = deploymentIP
                 }
             }
         }
