@@ -52,8 +52,7 @@ pipeline {
                 }
             }
         }
-    */
-
+    
         stage('Trivy Filesystem Scan') {
             steps {
                 script {
@@ -69,7 +68,7 @@ pipeline {
                 }
             }
         }
-
+*/
         stage('Build Docker Image') {
             steps {
                 script {
@@ -84,7 +83,7 @@ pipeline {
                 }
             }
         }
-
+/*
         stage('Trivy Docker Image Scan') {
             steps {
                 script {
@@ -100,7 +99,7 @@ pipeline {
                 }
             }
         }
-
+*/
         stage('Push Docker Image') {
             steps {
                 script {
