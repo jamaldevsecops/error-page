@@ -14,8 +14,7 @@ ENV HEALTHCHECK_URL=http://localhost:3000
 HEALTHCHECK --interval=30s --timeout=3s \
   CMD wget --quiet --tries=1 --spider $HEALTHCHECK_URL || exit 1
 
-# Set timezone to Asia/Dhaka
-ENV TZ=Asia/Dhaka
+# Copy the timezone file to /etc/localtime
 RUN cp /usr/share/zoneinfo/Asia/Dhaka /etc/localtime && \
     echo "Asia/Dhaka" > /etc/timezone
 
