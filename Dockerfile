@@ -15,8 +15,9 @@ HEALTHCHECK --interval=30s --timeout=3s \
   CMD wget --quiet --tries=1 --spider $HEALTHCHECK_URL || exit 1
 
 # Copy the timezone file to /etc/localtime
-RUN cp /usr/share/zoneinfo/Asia/Dhaka /etc/localtime && \
-    echo "Asia/Dhaka" > /etc/timezone
+RUN apk add --no-cache tzdata 
+ENV TZ=Asia/Dhaka
+RUN cp /usr/share/zoneinfo/Asia/Dhaka /etc/localtime
 
 # Use production node environment by default.
 ENV NODE_ENV development
