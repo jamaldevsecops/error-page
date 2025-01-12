@@ -9,6 +9,7 @@ pipeline {
         IMAGE_TAG = "latest"
         CONTAINER_PORT = "3000"
         HOST_PORT = "3030"
+        DEPLOY_ON = "ERP-DEV"
         RECIPIENT_EMAILS = "jamal.hossain@apsissolutions.com"
 
         FTP_HOST = "192.168.10.50:21"
@@ -33,8 +34,8 @@ pipeline {
                 checkout scm
             }
         }
-
-/*        stage('Download .env File') {
+/*
+        stage('Download .env File') {
             steps {
                 script {
                     echo 'Downloading .env file from FTP...'
@@ -52,7 +53,7 @@ pipeline {
                 }
             }
         }
-    
+*/
         stage('Trivy Filesystem Scan') {
             steps {
                 script {
@@ -68,7 +69,7 @@ pipeline {
                 }
             }
         }
-*/
+
         stage('Build Docker Image') {
             steps {
                 script {
@@ -76,14 +77,13 @@ pipeline {
                         echo 'Building Docker image...'
                         sh """
                             echo "$DOCKER_PASS" | docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin
-                            docker build -t ${DOCKER_IMAGE} -f Dockerfile . || exit 1
-                            docker logout ${DOCKER_REPO_URL}
+                            docker build -t ${DOCKER_IMAGE} -f ${DOCKER_FILENAME} . || exit 1
                         """
                     }
                 }
             }
         }
-/*
+
         stage('Trivy Docker Image Scan') {
             steps {
                 script {
@@ -99,7 +99,7 @@ pipeline {
                 }
             }
         }
-*/
+
         stage('Push Docker Image') {
             steps {
                 script {
@@ -108,107 +108,107 @@ pipeline {
                         sh """
                             echo "$DOCKER_PASS" | docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin
                             docker push ${DOCKER_IMAGE} || exit 1
-                            docker logout ${DOCKER_REPO_URL}
                         """
                     }
                 }
             }
         }
 
-        stage('Pull Docker Image on Deployment Server') {
+        stage('Pull Docker Image') {
             agent {
-                label 'ERP-DEV' // Deployment server node
+                label '$DEPLOY_ON' // change me
             }
             steps {
                 script {
-                    // Retrieve the IP address of the deployment server
-                    def deploymentIP = sh(script: 'hostname -I | awk \'{print $1}\'', returnStdout: true).trim()
-                    echo "Deployment server IP: ${deploymentIP}"
-
-                    // Save the deploymentIP in the environment variable for the post stage
-                    env.DEPLOYMENT_IP = deploymentIP
-                    
                     withCredentials([usernamePassword(credentialsId: DOCKER_HUB_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         echo 'Pulling Docker image on the deployment server...'
                         sh """
                             echo "$DOCKER_PASS" | docker login ${DOCKER_REPO_URL} -u "$DOCKER_USER" --password-stdin
                             docker pull ${DOCKER_IMAGE} || exit 1
-                            docker logout registry.apsissolutions.com
-                        """
-
-                        echo 'Stopping and removing existing Docker container if it exists...'
-                        def isRunning = sh(script: "docker inspect -f '{{.State.Running}}' ${CONTAINER_NAME}", returnStatus: true)
-                        if (isRunning == 0) {
-                            echo "Container ${CONTAINER_NAME} is running. Stopping and removing it..."
-                            sh """
-                                docker stop ${CONTAINER_NAME}
-                                docker rm ${CONTAINER_NAME}
-                            """
-                        } else {
-                            echo "Container ${CONTAINER_NAME} is not running, no need to stop or remove."
-                        }
-
-                        echo 'Deploying Docker container...'
-                        sh """
-                            docker run --restart ${RESTART_POLICY} --name ${CONTAINER_NAME} --network ${NETWORK_NAME} \
-                            -p ${DEPLOYMENT_IP}:${HOST_PORT}:${CONTAINER_PORT} \
-                            --memory 512m --cpus 1.0 \
-                            --security-opt no-new-privileges:true \
-                            --pids-limit 100 \
-                            -d ${DOCKER_IMAGE}
                         """
                     }
+                }
+            }
+        }
 
+        stage('Deploy Docker Container') {
+            agent {
+                label '$DEPLOY_ON' // change me
+            }
+            steps {
+                script {
+                    echo 'Stopping and removing existing Docker container if it exists...'
+                    def isRunning = sh(script: "docker inspect -f '{{.State.Running}}' ${CONTAINER_NAME}", returnStatus: true)
+                    if (isRunning == 0) {
+                        echo "Container ${CONTAINER_NAME} is running. Stopping and removing it..."
+                        sh """
+                            docker stop ${CONTAINER_NAME}
+                            docker rm ${CONTAINER_NAME}
+                        """
+                    } else {
+                        echo "Container ${CONTAINER_NAME} is not running, no need to stop or remove."
+                    }
+
+                    echo 'Deploying Docker container...'
+                    sh """
+                        docker run --restart ${RESTART_POLICY} --name ${CONTAINER_NAME} --network ${NETWORK_NAME} -p ${HOST_PORT}:${CONTAINER_PORT} -v /usr/bin/trivy:/usr/bin/trivy --memory 1024m --cpus 1.0 --security-opt no-new-privileges:true --pids-limit 50 --health-cmd='stat /etc/passwd || exit 1' -d ${DOCKER_IMAGE}
+                    """
+
+                    // Retrieve the IP address of the deployment server
+                    def deploymentIP = sh(script: "hostname -I | tr ' ' '\\n' | grep '^192\\.168\\.'", returnStdout: true).trim()
+                    echo "Deployment server IP: ${deploymentIP}"
+
+                    // Save the deploymentIP in the environment variable for the post stage
+                    env.DEPLOYMENT_IP = deploymentIP
                 }
             }
         }
 
     }
 
-    post {
-        success {
-            script {
-                echo 'Sending success email with scan reports...'
-                emailext(
-                    subject: "Jenkins Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                    body: """
-                    <p><b>Build Successful:</b></p>
-                    <ul>
-                        <li>Job Name: ${env.JOB_NAME}</li>
-                        <li>Build Number: ${env.BUILD_NUMBER}</li>
-                        <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li>
-                        <li>Access This App Locally: <a href="http://${env.DEPLOYMENT_IP}:${HOST_PORT}">http://${env.DEPLOYMENT_IP}:${HOST_PORT}</a></li>
-                        <li>Access Live App Log: <a href="http://${env.DEPLOYMENT_IP}:8080">http://${env.DEPLOYMENT_IP}:8080</a></li>
-                    </ul>
-                    <p><b>Trivy Vulnerability Scan Reports:</b></p>
-                    <p>See the attached Trivy scan reports for details on vulnerabilities found in the Docker image and filesystem.</p>
-                    """,
-                    to: RECIPIENT_EMAILS,
-                    mimeType: 'text/html',
-                    attachmentsPattern: "${TRIVY_FS_SCAN_REPORT},${TRIVY_IMAGE_SCAN_REPORT}"
-                )
-            }
-        }
-        failure {
-            script {
-                echo 'Sending failure email with build log...'
-                emailext(
-                    subject: "Jenkins Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                    body: """
-                    <p><b>Build Failed:</b></p>
-                    <ul>
-                        <li>Job Name: ${env.JOB_NAME}</li>
-                        <li>Build Number: ${env.BUILD_NUMBER}</li>
-                        <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li>
-                    </ul>
-                    <p>See the attached build log for details.</p>
-                    """,
-                    to: RECIPIENT_EMAILS,
-                    mimeType: 'text/html',
-                    attachLog: true
-                )
-            }
-        }
-    }
-
+    post { 
+        success { 
+            script { 
+                echo 'Sending success email with scan reports...' 
+                emailext( 
+                    subject: "Jenkins Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}", 
+                    body: """ 
+                    <p><b>Build Successful:</b></p> 
+                    <ul> 
+                        <li>Job Name: ${env.JOB_NAME}</li> 
+                        <li>Build Number: ${env.BUILD_NUMBER}</li> 
+                        <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li> 
+                        <li>Access This App Locally: <a href="http://${env.DEPLOYMENT_IP}:${HOST_PORT}">http://${env.DEPLOYMENT_IP}:${HOST_PORT}</a></li> 
+                        <li>Access Live App Log: <a href="http://${env.DEPLOYMENT_IP}:8080">http://${env.DEPLOYMENT_IP}:8080</a></li> 
+                    </ul> 
+                    <p><b>Trivy Vulnerability Scan Reports:</b></p> 
+                    <p>See the attached Trivy scan reports for details on vulnerabilities found in the Docker image and filesystem.</p> 
+                    """, 
+                    to: RECIPIENT_EMAILS, 
+                    mimeType: 'text/html', 
+                    attachmentsPattern: "${TRIVY_FS_SCAN_REPORT},${TRIVY_IMAGE_SCAN_REPORT}" 
+                ) 
+            } 
+        } 
+        failure { 
+            script { 
+                echo 'Sending failure email with build log...' 
+                emailext( 
+                    subject: "Jenkins Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}", 
+                    body: """ 
+                    <p><b>Build Failed:</b></p> 
+                    <ul> 
+                        <li>Job Name: ${env.JOB_NAME}</li> 
+                        <li>Build Number: ${env.BUILD_NUMBER}</li> 
+                        <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li> 
+                    </ul> 
+                    <p>See the attached build log for details.</p> 
+                    """, 
+                    to: RECIPIENT_EMAILS, 
+                    mimeType: 'text/html', 
+                    attachLog: true 
+                ) 
+            } 
+        } 
+    } 
 }
