@@ -17,7 +17,7 @@ pipeline {
         RECIPIENT_EMAILS = "report.infra@apsissolutions.com, kamruzzaman.khondakar@apsissolutions.com, shahriar.islam@apsissolutions.com"
 
         FTP_HOST = "192.168.10.50:21"
-        FTP_PATH = "/ENV_FILE/crm-issue-tracker/staging/crm-issue-tracker-backend"
+        FTP_PATH = "/ENV_FILE/crm-issue-tracker/staging/crm-issue-tracker-backend-d"
         LOCAL_PATH = "."
 
         // DO NOT CHANGE BELOW
