@@ -9,7 +9,6 @@ pipeline {
         IMAGE_TAG = "latest"
         CONTAINER_PORT = "3000"
         HOST_PORT = "3030"
-        DEPLOY_ON = "ERP-DEV"
         DOCKER_FILENAME = "Dockerfile"
         //RECIPIENT_EMAILS = "report.infra@apsissolutions.com"
         RECIPIENT_EMAILS = "report.infra@apsissolutions.com, kamruzzaman.khondakar@apsissolutions.com, shahriar.islam@apsissolutions.com"
@@ -118,7 +117,7 @@ pipeline {
 
         stage('Pull Docker Image') {
             agent {
-                label '$DEPLOY_ON' // change me
+                label 'ERP-DEV' // change me
             }
             steps {
                 script {
@@ -135,7 +134,7 @@ pipeline {
 
         stage('Deploy Docker Container') {
             agent {
-                label '$DEPLOY_ON' // change me
+                label 'ERP-DEV' // change me
             }
             steps {
                 script {
