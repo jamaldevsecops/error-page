@@ -10,10 +10,12 @@ pipeline {
         CONTAINER_PORT = "3000"
         HOST_PORT = "3030"
         DEPLOY_ON = "ERP-DEV"
-        RECIPIENT_EMAILS = "jamal.hossain@apsissolutions.com"
+        DOCKER_FILENAME = "Dockerfile-demo"
+        //RECIPIENT_EMAILS = "report.infra@apsissolutions.com"
+        RECIPIENT_EMAILS = "report.infra@apsissolutions.com, kamruzzaman.khondakar@apsissolutions.com, shahriar.islam@apsissolutions.com"
 
         FTP_HOST = "192.168.10.50:21"
-        FTP_PATH = "/ENV_FILE/crm-issue-tracker/staging/crm-issue-tracker-frontend"
+        FTP_PATH = "/ENV_FILE/crm-issue-tracker/staging/crm-issue-tracker-backend"
         LOCAL_PATH = "."
 
         // DO NOT CHANGE BELOW
