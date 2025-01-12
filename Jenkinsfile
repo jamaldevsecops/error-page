@@ -10,7 +10,7 @@ pipeline {
         CONTAINER_PORT = "3000"
         HOST_PORT = "3030"
         DEPLOY_ON = "ERP-DEV"
-        DOCKER_FILENAME = "Dockerfile-demo"
+        DOCKER_FILENAME = "Dockerfile"
         //RECIPIENT_EMAILS = "report.infra@apsissolutions.com"
         RECIPIENT_EMAILS = "report.infra@apsissolutions.com, kamruzzaman.khondakar@apsissolutions.com, shahriar.islam@apsissolutions.com"
 
