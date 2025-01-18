@@ -1,0 +1,31 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - main  # Trigger the workflow when pushing to the main branch
+  workflow_dispatch: # Allow manual triggers
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build Docker Image
+      run: |
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/error-page:${{ github.sha }} .
+        docker tag ${{ secrets.DOCKER_USERNAME }}/error-page:${{ github.sha }} ${{ secrets.DOCKER_USERNAME }}/error-page:latest
+
+    - name: Push Docker Image
+      run: |
+        docker push ${{ secrets.DOCKER_USERNAME }}/error-page:${{ github.sha }}
+        docker push ${{ secrets.DOCKER_USERNAME }}/error-page:latest
