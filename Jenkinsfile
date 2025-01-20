@@ -3,22 +3,27 @@ pipeline {
         label 'BUILD-SERVER'
     }
     environment {
-        CONTAINER_NAME = "dev-error-page"
+        CONTAINER_NAME = "dev-error-page" //change me
         IMAGE_TAG = "latest"
-        CONTAINER_PORT = "3030"             
+        CONTAINER_PORT = "3030"          //change me
         HOST_PORT = "3030" 
         NETWORK_NAME = "bridge"
         RESTART_POLICY = "always"
-        DOCKER_FILENAME = "Dockerfile"
+        DOCKER_FILENAME = "Dockerfile"	//change me
         RECIPIENT_EMAILS = "jamal.hossain@apsissolutions.com"
 
         FTP_HOST = "192.168.10.50:21" 
-        FTP_PATH = "/ENV_FILE/bracu/develop/bracu-frontend" // FTP server Absolute path
+        FTP_PATH = "/ENV_FILE/bracu/develop/bracu-frontend"
         LOCAL_PATH = "." 
 
-        TARGET_SERVER = "erp-dev.apsis.localnet" //change me
+        TARGET_SERVER = "ERP-DEV" //change me
         TARGET_USER = "devops"
-        DOCKER_IMAGE = "${CONTAINER_NAME}:${IMAGE_TAG}"
+        DOCKER_REPO_URL = "registry.apsissolutions.com"
+        DOCKER_IMAGE = "${DOCKER_REPO_URL}/${DEPLOYMENT_TYPE}/${CONTAINER_NAME}:${IMAGE_TAG}"
+
+        TRIVY_FS_SCAN_REPORT = "filesystem_vulnerability_report.txt"
+        TRIVY_IMAGE_SCAN_REPORT = "docker_image_vulnerability_report.txt"
+        TRIVY_SEVERITY = "HIGH,CRITICAL"
     }
 
     stages {
@@ -48,6 +53,18 @@ pipeline {
             } 
         } 
 */
+        stage('Trivy Filesystem Scan') {
+            steps {
+                script {
+                    echo 'Running Trivy filesystem scan...'
+                    sh """
+                        trivy fs --no-progress --severity ${TRIVY_SEVERITY} --exit-code 1 --format table . > ${TRIVY_FS_SCAN_REPORT}
+                    """
+                    echo "Filesystem scan report saved at: ${TRIVY_FS_SCAN_REPORT}"
+                }
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 script {
@@ -56,6 +73,18 @@ pipeline {
                         docker build -t ${DOCKER_IMAGE} -f ${DOCKER_FILENAME} .
                     """
                     echo "Docker image built successfully: ${DOCKER_IMAGE}"
+                }
+            }
+        }
+
+        stage('Trivy Docker Image Scan') {
+            steps {
+                script {
+                    echo 'Running Trivy Docker Image scan...'
+                    sh """
+                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 1 --format table ${DOCKER_IMAGE} > ${TRIVY_IMAGE_SCAN_REPORT}
+                    """
+                    echo "Docker Image scan report saved at: ${TRIVY_IMAGE_SCAN_REPORT}"
                 }
             }
         }
@@ -108,44 +137,49 @@ pipeline {
         }
     }
 
-    post {
-        success {
-            script {
-                echo 'Sending success email with scan reports...'
-                emailext(
-                    subject: "Jenkins Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                    body: """
-                    <p><b>Build Successful:</b></p>
-                    <ul>
-                        <li>Job Name: ${env.JOB_NAME}</li>
-                        <li>Build Number: ${env.BUILD_NUMBER}</li>
-                        <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li>
-                        <li>Access This App Locally: <a href="http://${env.DEPLOYMENT_IP}:${HOST_PORT}">http://${env.DEPLOYMENT_IP}:${HOST_PORT}</a></li>
-                    </ul>
-                    """,
-                    to: RECIPIENT_EMAILS,
-                    mimeType: 'text/html'
-                )
-            }
-        }
-        failure {
-            script {
-                echo 'Sending failure email with build log...'
-                emailext(
-                    subject: "Jenkins Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                    body: """
-                    <p><b>Build Failed:</b></p>
-                    <ul>
-                        <li>Job Name: ${env.JOB_NAME}</li>
-                        <li>Build Number: ${env.BUILD_NUMBER}</li>
-                        <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li>
-                    </ul>
-                    """,
-                    to: RECIPIENT_EMAILS,
-                    mimeType: 'text/html',
-                    attachLog: true
-                )
-            }
-        }
-    }
+    post { 
+        success { 
+            script { 
+                echo 'Sending success email with scan reports...' 
+                emailext( 
+                    subject: "Jenkins Build Successful: ${env.JOB_NAME} #${env.BUILD_NUMBER}", 
+                    body: """ 
+                    <p><b>Build Successful:</b></p> 
+                    <ul> 
+                        <li>Job Name: ${env.JOB_NAME}</li> 
+                        <li>Build Number: ${env.BUILD_NUMBER}</li> 
+                        <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li> 
+                        <li>Access This App Locally: <a href="http://${env.DEPLOYMENT_IP}:${HOST_PORT}">http://${env.DEPLOYMENT_IP}:${HOST_PORT}</a></li> 
+                        <li>Access Live App Log: <a href="http://${env.DEPLOYMENT_IP}:8080">http://${env.DEPLOYMENT_IP}:8080</a></li> 
+                    </ul> 
+                    <p><b>Trivy Vulnerability Scan Reports:</b></p> 
+                    <p>See the attached Trivy scan reports for details on vulnerabilities found in the Docker image and filesystem.</p> 
+                    """, 
+                    to: RECIPIENT_EMAILS, 
+                    mimeType: 'text/html', 
+                    attachmentsPattern: "${TRIVY_FS_SCAN_REPORT},${TRIVY_IMAGE_SCAN_REPORT}" 
+                ) 
+            } 
+        } 
+        failure { 
+            script { 
+                echo 'Sending failure email with build log...' 
+                emailext( 
+                    subject: "Jenkins Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}", 
+                    body: """ 
+                    <p><b>Build Failed:</b></p> 
+                    <ul> 
+                        <li>Job Name: ${env.JOB_NAME}</li> 
+                        <li>Build Number: ${env.BUILD_NUMBER}</li> 
+                        <li>Console Output: <a href="${env.BUILD_URL}console">${env.BUILD_URL}console</a></li> 
+                    </ul> 
+                    <p>See the attached build log for details.</p> 
+                    """, 
+                    to: RECIPIENT_EMAILS, 
+                    mimeType: 'text/html', 
+                    attachLog: true 
+                ) 
+            } 
+        } 
+    } 
 }
