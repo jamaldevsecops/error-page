@@ -18,8 +18,8 @@ pipeline {
 
         TARGET_SERVER = "ERP-DEV" //change me
         TARGET_USER = "devops"
-        DOCKER_REPO_URL = "registry.apsissolutions.com"
-        DOCKER_IMAGE = "${DOCKER_REPO_URL}/${DEPLOYMENT_TYPE}/${CONTAINER_NAME}:${IMAGE_TAG}"
+        DOCKER_HUB_USERNAME = "apsissolutions"
+        DOCKER_IMAGE = "${env.DOCKER_HUB_USERNAME}/${env.CONTAINER_NAME}:${env.IMAGE_TAG}"
 
         TRIVY_FS_SCAN_REPORT = "filesystem_vulnerability_report.txt"
         TRIVY_IMAGE_SCAN_REPORT = "docker_image_vulnerability_report.txt"
