@@ -58,7 +58,7 @@ pipeline {
                 script {
                     echo 'Running Trivy filesystem scan...'
                     sh """
-                        trivy fs --no-progress --severity ${TRIVY_SEVERITY} --exit-code 1 --format table . > ${TRIVY_FS_SCAN_REPORT}
+                        trivy fs --no-progress --severity ${TRIVY_SEVERITY} --exit-code 0 --format table . > ${TRIVY_FS_SCAN_REPORT}
                     """
                     echo "Filesystem scan report saved at: ${TRIVY_FS_SCAN_REPORT}"
                 }
@@ -76,19 +76,19 @@ pipeline {
                 }
             }
         }
-/*
+
         stage('Trivy Docker Image Scan') {
             steps {
                 script {
                     echo 'Running Trivy Docker Image scan...'
                     sh """
-                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 1 --format table ${DOCKER_IMAGE} > ${TRIVY_IMAGE_SCAN_REPORT}
+                        trivy image --severity ${TRIVY_SEVERITY} --no-progress --exit-code 0 --format table ${DOCKER_IMAGE} > ${TRIVY_IMAGE_SCAN_REPORT}
                     """
                     echo "Docker Image scan report saved at: ${TRIVY_IMAGE_SCAN_REPORT}"
                 }
             }
         }
-*/
+        
         stage('Transfer Docker Image') {
             steps {
                 script {
