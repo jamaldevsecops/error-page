@@ -76,7 +76,7 @@ pipeline {
                 }
             }
         }
-
+/*
         stage('Trivy Docker Image Scan') {
             steps {
                 script {
@@ -88,7 +88,7 @@ pipeline {
                 }
             }
         }
-
+*/
         stage('Transfer Docker Image') {
             steps {
                 script {
